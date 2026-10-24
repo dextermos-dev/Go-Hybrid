@@ -518,6 +518,9 @@ pub struct Emitter {
     /// The current (non-main) fn's per-result RETURN texts when its results
     /// end in `error` — E3 propagates via `return <zeros…, err>`.
     cur_fn_error_returns: Option<Vec<String>>,
+    /// Whether the current fn declares named results (`(total int, err error)`).
+    /// Used by emit_return to avoid clobbering assigned named results on bare return (#1450).
+    cur_fn_has_named_results: bool,
     /// Per-fn result shapes, collected eagerly (Batch I): name →
     /// (n_results, ends_in_error, first_result's binding kind, per-param
     /// pointer-base types). Drives the `?` hoist arity (13:
@@ -582,6 +585,7 @@ impl Emitter {
             binding_prefix: "hybrid.program".to_string(),
             export_pub: false,
             cur_fn_error_returns: None,
+            cur_fn_has_named_results: false,
             fn_shapes: BTreeMap::new(),
             struct_fields: BTreeMap::new(),
             var_struct: BTreeMap::new(),
@@ -1250,6 +1254,7 @@ impl Emitter {
         // E3 in an error-result fn (package mode, example 09): the
         // propagation tail returns the zero results + the error.
         self.cur_fn_error_returns = None;
+        self.cur_fn_has_named_results = f.results.iter().any(|r| r.name.is_some());
         if !is_main && !f.results.is_empty() && !main_needs_wrapper {
             let last_is_err = matches!(
                 &f.results.last().unwrap().ty,
@@ -1413,6 +1418,8 @@ impl Emitter {
             self.emit_block_body(&body.stmts)?;
         }
         self.push("}");
+        self.cur_fn_error_returns = None;
+        self.cur_fn_has_named_results = false;
         Ok(())
     }
 

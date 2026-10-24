@@ -3032,3 +3032,91 @@ fn main() {}
     assert!(go6.contains("func read_url() int {"));
     assert!(go6.contains("func read_u_r_l() int {"));
 }
+
+#[test]
+fn named_error_fn_bare_return_preserves_named_results_issue_1450() {
+    let src = "\
+import \"errors\"
+
+fn compute(bad bool) (total int, err error) {
+    total = 42
+    if bad {
+        err = errors.new(\"boom\")
+        return
+    }
+    return
+}
+
+fn main() {}
+";
+    let go = emit(src);
+    // Both return sites must emit naked `return`, preserving total and err
+    assert!(
+        go.contains("func compute(bad bool) (total int, err error) {\n\ttotal = 42\n\tif bad {\n\t\terr = errors.New(\"boom\")\n\t\treturn\n\t}\n\treturn\n"),
+        ":\n{}",
+        go
+    );
+    assert!(!go.contains("return 0, nil"), "must not zero-fill named return values:\n{}", go);
+}
+
+#[test]
+fn mixed_named_error_fn_bare_return_emits_naked_return_issue_1450() {
+    let src = "\
+fn compute() (total int, error) {
+    total = 100
+    return
+}
+
+fn main() {}
+";
+    let go = emit(src);
+    // Mixed named/unnamed normalizes to named results in Go, so bare return must stay naked
+    assert!(go.contains("\treturn\n"), "bare return must be naked:\n{}", go);
+    assert!(!go.contains("return 0, nil"), "must not clobber named total:\n{}", go);
+}
+
+#[test]
+fn named_error_fn_explicit_short_return_still_zero_fills() {
+    let src = "\
+fn compute() (total int, err error) {
+    return 99
+}
+
+fn main() {}
+";
+    let go = emit(src);
+    // Explicit short return fills remaining slots
+    assert!(
+        go.contains("return 99, nil"),
+        "explicit short return must fill error slot with nil:\n{}",
+        go
+    );
+}
+
+#[test]
+fn unnamed_error_fn_bare_return_still_zero_fills() {
+    let src = "\
+fn compute() (int, error) {
+    return
+}
+
+fn compute_err_only() error {
+    return
+}
+
+fn main() {}
+";
+    let go = emit(src);
+    // Unnamed results cannot say naked return in Go, so zero-fill is preserved
+    assert!(
+        go.contains("func compute() (int, error) {\n\treturn 0, nil\n}"),
+        ":\n{}",
+        go
+    );
+    assert!(
+        go.contains("func compute_err_only() error {\n\treturn nil\n}"),
+        ":\n{}",
+        go
+    );
+}
+
