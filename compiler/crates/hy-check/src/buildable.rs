@@ -3898,7 +3898,7 @@ impl<'a> Collector<'a> {
                             }
                         }
                     }
-                } else if name == "pop" {
+                } else if !has_method && name == "pop" {
                     self.check_slice_pop_operands(base, &bk, args, span);
                 } else if !has_method {
                     // #682 U2/U3: neither a declared method nor a field exists
@@ -4097,7 +4097,11 @@ impl<'a> Collector<'a> {
             | OpKind::Str
             | OpKind::Array(_)
             | OpKind::Map(_, _)
-            | OpKind::Chan(_) => {
+            | OpKind::Chan(_)
+            | OpKind::Struct(_)
+            | OpKind::Pointer(_)
+            | OpKind::Interface
+            | OpKind::Fn(..) => {
                 self.emit_e1002(
                     span,
                     format!(
@@ -4105,7 +4109,7 @@ impl<'a> Collector<'a> {
                         base.render(),
                         bk.label()
                     ),
-                    "`.pop()` is a slice operation (`[]T`); fixed-size arrays, maps, channels, and primitives do not support `.pop()`",
+                    "`.pop()` is a slice operation (`[]T`); structs, pointers, interfaces, fixed-size arrays, maps, channels, and primitives do not support `.pop()`",
                 );
             }
             _ => {}
