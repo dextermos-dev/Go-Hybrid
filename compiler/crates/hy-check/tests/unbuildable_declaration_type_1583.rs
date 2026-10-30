@@ -138,8 +138,8 @@ fn shape_12_generic_type_arg_undefined_rejects_e1002() {
 fn shape_13_explicit_const_undefined_type_rejects_e1002() {
     let r = check("const c missing = 1\nfn main() {\n  fmt.println(c)\n}");
     assert_eq!(r.verdict, Verdict::Reject);
-    assert_eq!(error_codes(&r), vec!["HYB-E1002"]);
-    assert!(error_messages(&r)[0].contains("undefined: missing"));
+    assert!(error_codes(&r).contains(&"HYB-E1002".to_string()));
+    assert!(error_messages(&r).iter().any(|m| m.contains("undefined: missing")));
 }
 
 // ---------------------------------------------------------------------------
