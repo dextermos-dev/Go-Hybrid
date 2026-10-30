@@ -1195,13 +1195,15 @@ impl<'a> Checker<'a> {
                 } else if matches!(op, Expr::Field { .. })
                     && matches!(self.shape_of_expr(st, op), TypeShape::OwnHandle(_))
                 {
-                    if let Some(root) = op.root_ident() {
+                    if let Some(root) = crate::freeze::is_binding_rooted_field_chain(op) {
                         if self.lookup_binding(st, root).is_some() {
                             if !managed {
                                 self.check_non_owned_move(st, root, v.span());
                             }
                             moves.push((root.to_string(), v.span()));
                         }
+                    } else if !managed {
+                        self.check_o54_non_ident_move(st, op, v.span());
                     }
                 } else if !managed {
                     self.check_o54_non_ident_move(st, op, v.span());
@@ -1239,13 +1241,15 @@ impl<'a> Checker<'a> {
                 } else if matches!(op, Expr::Field { .. })
                     && matches!(self.shape_of_expr(st, op), TypeShape::OwnHandle(_))
                 {
-                    if let Some(root) = op.root_ident() {
+                    if let Some(root) = crate::freeze::is_binding_rooted_field_chain(op) {
                         if self.lookup_binding(st, root).is_some() {
                             if !managed {
                                 self.check_non_owned_move(st, root, mspan);
                             }
                             moves.push((root.to_string(), mspan));
                         }
+                    } else if !managed {
+                        self.check_o54_non_ident_move(st, op, mspan);
                     }
                 } else if !managed {
                     self.check_o54_non_ident_move(st, op, mspan);
