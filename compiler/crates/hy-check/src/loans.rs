@@ -1079,6 +1079,27 @@ impl<'a> Checker<'a> {
                 }
                 if let Some(existing_fnlit) = st.closure_fnlits.get(src).cloned() {
                     st.closure_fnlits.insert(name.to_string(), existing_fnlit);
+                } else {
+                    let head = Self::base_named_type_str(src);
+                    let decl_opt = self.fns.get(src).or_else(|| self.fns.get(head)).copied();
+                    if let Some(decl) = decl_opt {
+                        if let Some(body) = &decl.body {
+                            let typed_params: Vec<(String, Option<hy_syntax::TypeExpr>)> = decl
+                                .params
+                                .iter()
+                                .map(|p| (p.name.clone(), Some(p.ty.clone())))
+                                .collect();
+                            let typed_results: Vec<(String, Option<hy_syntax::TypeExpr>)> = decl
+                                .results
+                                .iter()
+                                .map(|r| (r.name.clone().unwrap_or_default(), Some(r.ty.clone())))
+                                .collect();
+                            st.closure_fnlits.insert(
+                                name.to_string(),
+                                (typed_params, typed_results, body.clone()),
+                            );
+                        }
+                    }
                 }
                 let inherited = st
                     .closure_mutates
@@ -4163,6 +4184,22 @@ impl<'a> Checker<'a> {
                 if let Some((params, results, body)) = st.closure_fnlits.get(name.as_str()) {
                     return Some((params.clone(), results.clone(), body));
                 }
+                let resolved_alias = crate::freeze::resolve_alias(st, name);
+                if resolved_alias != *name {
+                    if let Some((params, results, body)) = st.closure_fnlits.get(resolved_alias.as_str()) {
+                        return Some((params.clone(), results.clone(), body));
+                    }
+                    if self.lookup_binding(st, &resolved_alias).is_none() {
+                        let head = Self::base_named_type_str(&resolved_alias);
+                        if let Some(decl) = self.fns.get(resolved_alias.as_str()).or_else(|| self.fns.get(head)).copied() {
+                            if let Some(body) = decl.body.as_ref() {
+                                let params = decl.params.iter().map(|p| (p.name.clone(), Some(p.ty.clone()))).collect();
+                                let results = decl.results.iter().map(|r| (r.name.clone().unwrap_or_default(), Some(r.ty.clone()))).collect();
+                                return Some((params, results, body));
+                            }
+                        }
+                    }
+                }
                 if self.lookup_binding(st, name).is_some() {
                     return None;
                 }
@@ -4275,7 +4312,12 @@ impl<'a> Checker<'a> {
         out: &mut Vec<String>,
         depth: usize,
     ) {
-        if depth > 4 {
+        if depth > 32 {
+            for (cname, cb) in &self.consts {
+                if self.shape_may_share(&cb.shape) && !out.contains(cname) {
+                    out.push(cname.clone());
+                }
+            }
             return;
         }
         match unwrap_parens(value) {
@@ -4316,6 +4358,14 @@ impl<'a> Checker<'a> {
                 let Some((typed_params, typed_results, body)) =
                     self.resolve_call_expr_decl_or_fnlit(st, callee)
                 else {
+                    let ret_shape = self.shape_of_expr(st, value);
+                    if self.shape_may_share(&ret_shape) || matches!(ret_shape, TypeShape::Unknown) {
+                        for (cname, cb) in &self.consts {
+                            if self.shape_may_share(&cb.shape) && !out.contains(cname) {
+                                out.push(cname.clone());
+                            }
+                        }
+                    }
                     return;
                 };
                 let mut shadowed: HashSet<String> =
