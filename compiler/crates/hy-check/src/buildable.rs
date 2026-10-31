@@ -1697,9 +1697,6 @@ impl<'a> Collector<'a> {
             let elem_kind = self.kind_of_type_str(inner, depth + 1);
             return OpKind::Set(Box::new(elem_kind));
         }
-        if name == "set" {
-            return OpKind::Set(Box::new(OpKind::Unknown));
-        }
         if let Some(target) = self.ck.type_aliases.get(base) {
             return self.kind_of_ty(target, depth + 1);
         }
